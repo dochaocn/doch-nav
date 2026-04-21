@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>个人导航站 — 设置</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <div class="page">
+      <h1>个人导航站 · 设置</h1>
+
+      <section class="card">
+        <h2>与 Google 账号同步</h2>
+        <p>
+          常用链接、暂存与点击统计默认保存在
+          <strong>chrome.storage.sync</strong>。当你使用同一 Google 账号登录
+          Chrome，并在「设置 → 同步与 Google 服务」中<strong>开启同步</strong>，且包含
+          <strong>扩展程序</strong>数据时，上述数据会通过 Chrome
+          加密同步到你的账号并在其他设备上合并。
+        </p>
+        <p>
+          若未登录、关闭同步或关闭了扩展数据同步，数据仍保存在本机
+          profile，但<strong>不会</strong>跨设备同步。
+        </p>
+        <p class="muted">
+          sync 存储约有总容量与单条大小等限制。若超出配额，扩展会将部分列表降级为仅本机存储（选项页无法强制云端同步）。
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>一键暂存</h2>
+        <p>
+          在普通网页前台时，点击浏览器工具栏中的<strong>本扩展图标</strong>，会将当前标签页加入新标签页里的<strong>暂存</strong>（默认文件夹），无弹窗、无二次确认。系统页面或扩展页面无法暂存。
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>浏览历史（可选）</h2>
+        <p>
+          开启后，「经常访问」区域可额外根据<strong>近 14 天本机浏览历史</strong>聚合域名访问次数（仅在本地计算，不上传至本扩展服务器）。
+        </p>
+        <button type="button" class="btn" id="btn-history-on">
+          授予「历史记录」权限
+        </button>
+        <button type="button" class="btn btn--ghost" id="btn-history-off">
+          移除该权限
+        </button>
+        <p class="hint" id="history-status"></p>
+      </section>
+
+      <section class="card">
+        <h2>数据</h2>
+        <p class="danger">以下操作不可恢复。</p>
+        <button type="button" class="btn btn--danger" id="btn-clear">
+          清除本扩展的全部数据
+        </button>
+        <p class="hint" id="clear-msg"></p>
+      </section>
+
+      <p class="foot">
+        <a href="newtab.html" target="_blank" rel="noopener">打开新标签页导航</a>
+      </p>
+    </div>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>
