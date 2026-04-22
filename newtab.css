@@ -173,8 +173,23 @@ a:hover {
   min-height: 0;
 }
 
+/* 暂存：高度随磁贴行数增长，不再压在固定比例里导致裁切 */
+.panel--stash {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+}
+
+.panel--stash .folder-stack {
+  flex: 0 0 auto;
+  min-height: 0;
+  overflow: visible;
+}
+
+/* 经常访问：占据右栏剩余高度，内容多时在区内滚动 */
 .panel--scroll {
-  flex: 2;
+  flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -182,7 +197,8 @@ a:hover {
 }
 
 .panel--grow {
-  flex: 3;
+  flex: 1 1 auto;
+  min-height: 160px;
 }
 
 .panel--fill {
@@ -398,8 +414,6 @@ a:hover {
 }
 .tile:hover .tile__actions,
 .tile:focus-within .tile__actions,
-.stash-item:hover .tile__actions,
-.stash-item:focus-within .tile__actions,
 .card--freq:hover .tile__actions,
 .card--freq:focus-within .tile__actions {
   opacity: 1;
@@ -443,6 +457,10 @@ a:hover {
 
 .card--freq {
   position: relative;
+  cursor: grab;
+}
+.card--freq:active {
+  cursor: grabbing;
 }
 
 .card__link {
@@ -491,82 +509,6 @@ a:hover {
   font-size: 0.72rem;
   color: var(--muted);
   margin: 0;
-}
-
-/* 暂存 */
-.stash-list {
-  list-style: none;
-  margin: 0 0 14px;
-  padding: 0;
-}
-
-.stash-item {
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 10px 44px 10px 0;
-  border-bottom: 1px solid var(--border);
-}
-.stash-item:last-child {
-  border-bottom: none;
-}
-
-.stash-item__main {
-  flex: 1;
-  min-width: 0;
-}
-.stash-item__url {
-  margin: 0;
-  font-size: 0.78rem;
-  color: var(--muted);
-  word-break: break-all;
-}
-
-.stash-item__url-link {
-  color: var(--muted);
-  text-decoration: none;
-}
-.stash-item__url-link:hover {
-  color: var(--ring);
-  text-decoration: underline;
-}
-
-.stash-item__title-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 4px;
-}
-
-.stash-item__name-link {
-  display: inline-block;
-  font: inherit;
-  font-size: 0.92rem;
-  font-weight: 600;
-  color: var(--text);
-  text-decoration: none;
-  padding: 2px 0;
-  border-radius: 4px;
-  max-width: 100%;
-  word-break: break-word;
-}
-.stash-item__name-link:hover {
-  color: var(--ring);
-  text-decoration: underline;
-}
-
-.stash-item__rename {
-  flex-shrink: 0;
-  padding: 2px 8px;
-  font-size: 0.78rem;
-}
-
-.stash-item__page {
-  font-size: 0.75rem;
-  color: var(--muted);
-  margin: 0 0 4px;
 }
 
 .foot {

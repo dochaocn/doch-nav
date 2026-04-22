@@ -18,6 +18,12 @@ import {
 
 const DND = "application/x-personal-nav";
 
+function dndTypePresent(e) {
+  return [...e.dataTransfer.types].some(
+    (t) => t === DND || t.toLowerCase() === DND.toLowerCase()
+  );
+}
+
 const state = {
   pinned: { folders: [], items: [] },
   stash: { folders: [], items: [] },
@@ -378,25 +384,39 @@ function parseDnD(e) {
 
 function handlePinnedDropOnFolder(e, targetFolderId) {
   const d = parseDnD(e);
-  if (!d || !d.id) return;
-  if (d.z === "p") {
+  if (!d) return;
+  if (d.z === "p" && d.id) {
     void movePinnedItem(d.id, targetFolderId, null);
     return;
   }
-  if (d.z === "stash") {
+  if (d.z === "stash" && d.id) {
     void addStashItemToPinned(d.id, targetFolderId, null);
+    return;
+  }
+  if (d.z === "freq" && d.url) {
+    void addPinnedAt(d.url, d.title, targetFolderId, null, {
+      hideFreqNu: d.nu
+    });
+    return;
   }
 }
 
 function handlePinnedDropOnItem(e, targetItemId, targetFolderId) {
   const d = parseDnD(e);
-  if (!d || !d.id) return;
-  if (d.z === "p" && d.id !== targetItemId) {
+  if (!d) return;
+  if (d.z === "p" && d.id && d.id !== targetItemId) {
     void movePinnedItem(d.id, targetFolderId, targetItemId);
     return;
   }
-  if (d.z === "stash") {
+  if (d.z === "stash" && d.id) {
     void addStashItemToPinned(d.id, targetFolderId, targetItemId);
+    return;
+  }
+  if (d.z === "freq" && d.url) {
+    void addPinnedAt(d.url, d.title, targetFolderId, targetItemId, {
+      hideFreqNu: d.nu
+    });
+    return;
   }
 }
 
@@ -562,6 +582,27 @@ async function removePinned(id) {
 
 // —— 暂存 —— //
 
+async function renameStashItem(id) {
+  const it = state.stash.items.find((x) => x.id === id);
+  if (!it) return;
+  const cur = it.label || it.pageTitle || hostLabel(it.url);
+  const nv = window.prompt("显示名称（留空则用页面标题）", cur);
+  if (nv === null) return;
+  const nextLabel = nv.trim() || it.pageTitle || hostLabel(it.url);
+  const prev = String(it.label ?? it.pageTitle ?? "").trim();
+  if (nextLabel === prev) return;
+  const items = state.stash.items.map((i) =>
+    i.id === id ? { ...i, label: nextLabel, updatedAt: Date.now() } : i
+  );
+  try {
+    await setStashState({ folders: state.stash.folders, items });
+    state.stash = await getStashState();
+    renderStash();
+  } catch (err) {
+    showToast(err.message || String(err));
+  }
+}
+
 function renderStash() {
   const root = $("stash-root");
   const empty = $("stash-empty");
@@ -602,119 +643,94 @@ function renderStash() {
     drop.className = "folder-drop";
     mountStashFolderDrop(drop, f.id);
 
-    const ul = document.createElement("ul");
-    ul.className = "stash-list";
+    const grid = document.createElement("div");
+    grid.className = "tile-grid";
     for (const s of items) {
-      ul.appendChild(renderStashRow(s, f.id));
+      grid.appendChild(renderStashTile(s, f.id));
     }
-    drop.appendChild(ul);
+    drop.appendChild(grid);
     details.appendChild(drop);
     root.appendChild(details);
   }
 }
 
-function renderStashRow(s, folderId) {
-  const li = document.createElement("li");
-  li.className = "stash-item";
-  li.draggable = true;
-  li.addEventListener("dragstart", (e) => {
+function renderStashTile(s, folderId) {
+  const a = document.createElement("a");
+  a.className = "tile";
+  a.href = s.url;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  a.draggable = true;
+  const headline = s.label || s.pageTitle || hostLabel(s.url);
+  const tipParts = [];
+  if (s.pageTitle && s.pageTitle !== headline) tipParts.push("页面标题：" + s.pageTitle);
+  tipParts.push(s.url);
+  a.title = tipParts.join("\n");
+
+  a.addEventListener("click", async (e) => {
+    if (e.target.closest(".tile__actions")) {
+      e.preventDefault();
+      return;
+    }
+    await bumpUsage(s.url);
+  });
+
+  a.addEventListener("dragstart", (e) => {
     e.dataTransfer.setData(
       DND,
       JSON.stringify({ z: "stash", id: s.id, folderId })
     );
     e.dataTransfer.effectAllowed = "move";
   });
-  li.addEventListener("dragover", (e) => {
+  a.addEventListener("dragover", (e) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
   });
-  li.addEventListener("drop", (e) => {
+  a.addEventListener("drop", (e) => {
     e.preventDefault();
     void handleStashDropOnRow(e, s.id, folderId);
   });
 
-  const main = document.createElement("div");
-  main.className = "stash-item__main";
+  const img = document.createElement("img");
+  img.className = "tile__fav";
+  img.alt = "";
+  setFaviconOnImg(img, s.url);
+  img.width = 40;
+  img.height = 40;
 
-  const titleRow = document.createElement("div");
-  titleRow.className = "stash-item__title-row";
+  const label = document.createElement("div");
+  label.className = "tile__label";
+  label.textContent = s.label || s.pageTitle || hostLabel(s.url);
 
-  const nameLink = document.createElement("a");
-  nameLink.className = "stash-item__name-link";
-  nameLink.href = s.url;
-  nameLink.target = "_blank";
-  nameLink.rel = "noopener noreferrer";
-  nameLink.textContent = s.label || s.pageTitle || hostLabel(s.url);
-  nameLink.addEventListener("click", (ev) => {
-    ev.stopPropagation();
-  });
-
+  const actions = document.createElement("div");
+  actions.className = "tile__actions";
   const renameBtn = document.createElement("button");
   renameBtn.type = "button";
-  renameBtn.className = "btn btn--ghost btn--sm stash-item__rename";
-  renameBtn.textContent = "改名称";
+  renameBtn.className = "mini-btn";
+  renameBtn.textContent = "改";
   renameBtn.title = "修改显示名称";
-  renameBtn.addEventListener("click", async (ev) => {
-    ev.preventDefault();
-    ev.stopPropagation();
-    const cur = s.label || s.pageTitle || hostLabel(s.url);
-    const nv = window.prompt("显示名称（留空则用页面标题）", cur);
-    if (nv === null) return;
-    const nextLabel = nv.trim() || s.pageTitle || hostLabel(s.url);
-    const prev = String(s.label ?? s.pageTitle ?? "").trim();
-    if (nextLabel === prev) return;
-    const items = state.stash.items.map((it) =>
-      it.id === s.id
-        ? { ...it, label: nextLabel, updatedAt: Date.now() }
-        : it
-    );
-    try {
-      await setStashState({ folders: state.stash.folders, items });
-      state.stash = await getStashState();
-      renderStash();
-    } catch (err) {
-      showToast(err.message || String(err));
-    }
+  renameBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    void renameStashItem(s.id);
   });
-
-  titleRow.appendChild(nameLink);
-  titleRow.appendChild(renameBtn);
-
-  const page = document.createElement("p");
-  page.className = "stash-item__page";
-  page.textContent = "原页面标题：" + (s.pageTitle || "—");
-
-  const urlLink = document.createElement("a");
-  urlLink.className = "stash-item__url stash-item__url-link";
-  urlLink.href = s.url;
-  urlLink.target = "_blank";
-  urlLink.rel = "noopener noreferrer";
-  urlLink.textContent = s.url;
-  urlLink.addEventListener("click", (ev) => {
-    ev.stopPropagation();
-  });
-
-  main.appendChild(titleRow);
-  main.appendChild(page);
-  main.appendChild(urlLink);
-
-  const tileActions = document.createElement("div");
-  tileActions.className = "tile__actions";
   const del = document.createElement("button");
   del.type = "button";
   del.className = "mini-btn";
   del.textContent = "删";
   del.title = "删除";
-  del.addEventListener("click", (ev) => {
-    ev.preventDefault();
-    ev.stopPropagation();
+  del.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     void removeStash(s.id);
   });
-  tileActions.appendChild(del);
+  actions.appendChild(renameBtn);
+  actions.appendChild(del);
 
-  li.appendChild(main);
-  li.appendChild(tileActions);
-  return li;
+  a.appendChild(img);
+  a.appendChild(label);
+  a.appendChild(actions);
+  return a;
 }
 
 function mountStashFolderDrop(el, folderId) {
@@ -730,15 +746,35 @@ function mountStashFolderDrop(el, folderId) {
     e.preventDefault();
     el.classList.remove("folder-drop--over");
     const d = parseDnD(e);
-    if (!d || d.z !== "stash" || !d.id) return;
-    await moveStashToFolder(d.id, folderId, null);
+    if (!d) return;
+    if (d.z === "stash" && d.id) {
+      await moveStashToFolder(d.id, folderId, null);
+      return;
+    }
+    if (d.z === "p" && d.id) {
+      await addPinnedItemToStash(d.id, folderId, null);
+      return;
+    }
+    if (d.z === "freq" && d.url) {
+      await addFreqEntryToStash(d.nu, d.url, d.title, folderId, null);
+    }
   });
 }
 
 async function handleStashDropOnRow(e, targetId, folderId) {
   const d = parseDnD(e);
-  if (!d || d.z !== "stash" || !d.id || d.id === targetId) return;
-  await moveStashToFolder(d.id, folderId, targetId);
+  if (!d) return;
+  if (d.z === "stash" && d.id && d.id !== targetId) {
+    await moveStashToFolder(d.id, folderId, targetId);
+    return;
+  }
+  if (d.z === "p" && d.id) {
+    await addPinnedItemToStash(d.id, folderId, targetId);
+    return;
+  }
+  if (d.z === "freq" && d.url) {
+    await addFreqEntryToStash(d.nu, d.url, d.title, folderId, targetId);
+  }
 }
 
 async function moveStashToFolder(itemId, targetFolderId, beforeId) {
@@ -784,6 +820,184 @@ async function removeStash(id) {
   }
 }
 
+/**
+ * 常用条目移入暂存（指定文件夹与插入位置；beforeStashId 为 null 表示插到该文件夹顶部）。
+ */
+async function addPinnedItemToStash(pinnedId, targetFolderId, beforeStashId) {
+  const pin = state.pinned.items.find((x) => x.id === pinnedId);
+  if (!pin) return;
+  if (state.stash.items.some((s) => s.url === pin.url)) {
+    showToast("已有相同网址在暂存中");
+    return;
+  }
+  const now = Date.now();
+  const pt = pin.title || hostLabel(pin.url);
+  const newStash = {
+    id: crypto.randomUUID(),
+    url: pin.url,
+    pageTitle: pt,
+    label: pt,
+    folderId: targetFolderId,
+    note: "",
+    stashedAt: now,
+    updatedAt: now
+  };
+
+  const nextPinned = state.pinned.items.filter((x) => x.id !== pinnedId);
+  const allStash = state.stash.items.map((x) => ({ ...x }));
+  const bucket = allStash
+    .filter((x) => x.folderId === targetFolderId)
+    .sort((a, b) => (b.stashedAt || 0) - (a.stashedAt || 0));
+  let newBucket;
+  if (beforeStashId) {
+    const ix = bucket.findIndex((x) => x.id === beforeStashId);
+    if (ix >= 0) {
+      newBucket = [...bucket.slice(0, ix), newStash, ...bucket.slice(ix)];
+    } else {
+      newBucket = [newStash, ...bucket];
+    }
+  } else {
+    newBucket = [newStash, ...bucket];
+  }
+  const rest = allStash.filter((x) => x.folderId !== targetFolderId);
+  const mergedStash = [...rest, ...newBucket];
+
+  try {
+    await setStashState({ folders: state.stash.folders, items: mergedStash });
+    await setPinnedState({ folders: state.pinned.folders, items: nextPinned });
+    state.stash = await getStashState();
+    state.pinned = await getPinnedState();
+    renderStash();
+    renderPinned();
+    renderFreq();
+    await updateSyncBanner();
+    showToast("已移入暂存");
+  } catch (err) {
+    showToast(err.message || String(err));
+  }
+}
+
+/**
+ * 「经常访问」卡片拖入暂存：写入暂存并隐藏该建议项（与点「删」一致）。
+ */
+async function addFreqEntryToStash(nu, url, title, targetFolderId, beforeStashId) {
+  if (state.stash.items.some((s) => s.url === url)) {
+    showToast("已有相同网址在暂存中");
+    return;
+  }
+  const now = Date.now();
+  const pt = title || hostLabel(url);
+  const newStash = {
+    id: crypto.randomUUID(),
+    url,
+    pageTitle: pt,
+    label: pt,
+    folderId: targetFolderId,
+    note: "",
+    stashedAt: now,
+    updatedAt: now
+  };
+  const allStash = state.stash.items.map((x) => ({ ...x }));
+  const bucket = allStash
+    .filter((x) => x.folderId === targetFolderId)
+    .sort((a, b) => (b.stashedAt || 0) - (a.stashedAt || 0));
+  let newBucket;
+  if (beforeStashId) {
+    const ix = bucket.findIndex((x) => x.id === beforeStashId);
+    if (ix >= 0) {
+      newBucket = [...bucket.slice(0, ix), newStash, ...bucket.slice(ix)];
+    } else {
+      newBucket = [newStash, ...bucket];
+    }
+  } else {
+    newBucket = [newStash, ...bucket];
+  }
+  const rest = allStash.filter((x) => x.folderId !== targetFolderId);
+  const mergedStash = [...rest, ...newBucket];
+
+  try {
+    await setStashState({ folders: state.stash.folders, items: mergedStash });
+    await addFreqHiddenUrl(nu);
+    state.stash = await getStashState();
+    state.freqHidden = await getFreqHiddenUrls();
+    renderStash();
+    renderFreq();
+    await updateSyncBanner();
+    showToast("已加入暂存");
+  } catch (err) {
+    showToast(err.message || String(err));
+  }
+}
+
+function mountFreqPanelDrop(el) {
+  el.addEventListener(
+    "dragover",
+    (e) => {
+      if (!dndTypePresent(e)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      el.classList.add("folder-drop--over");
+    },
+    true
+  );
+  el.addEventListener(
+    "dragleave",
+    (e) => {
+      if (e.relatedTarget && el.contains(e.relatedTarget)) return;
+      el.classList.remove("folder-drop--over");
+    },
+    true
+  );
+  el.addEventListener(
+    "drop",
+    (e) => {
+      if (!dndTypePresent(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      el.classList.remove("folder-drop--over");
+      const d = parseDnD(e);
+      if (!d) return;
+      if (d.z === "freq") return;
+      if (d.z === "p" && d.id) {
+        void (async () => {
+          try {
+            await setPinnedState({
+              folders: state.pinned.folders,
+              items: state.pinned.items.filter((p) => p.id !== d.id)
+            });
+            state.pinned = await getPinnedState();
+            renderPinned();
+            renderFreq();
+            await updateSyncBanner();
+            showToast("已从常用中移除（站点仍可按数据出现在「经常访问」）");
+          } catch (err) {
+            showToast(err.message || String(err));
+          }
+        })();
+        return;
+      }
+      if (d.z === "stash" && d.id) {
+        void (async () => {
+          try {
+            await setStashState({
+              folders: state.stash.folders,
+              items: state.stash.items.filter((s) => s.id !== d.id)
+            });
+            state.stash = await getStashState();
+            renderStash();
+            renderFreq();
+            await updateSyncBanner();
+            showToast("已从暂存中移除");
+          } catch (err) {
+            showToast(err.message || String(err));
+          }
+        })();
+      }
+    },
+    true
+  );
+}
+
 // —— 经常访问 —— //
 
 function renderFreq() {
@@ -799,12 +1013,17 @@ function renderFreq() {
   empty.hidden = allEntries.length > 0;
 
   root.innerHTML = "";
+  const dropShell = document.createElement("div");
+  dropShell.className = "folder-drop freq-panel-drop";
+  mountFreqPanelDrop(dropShell);
+
   const grid = document.createElement("div");
   grid.className = "card-grid";
-  for (const e of allEntries) {
-    grid.appendChild(renderFreqCard(e));
+  for (const ent of allEntries) {
+    grid.appendChild(renderFreqCard(ent));
   }
-  root.appendChild(grid);
+  dropShell.appendChild(grid);
+  root.appendChild(dropShell);
 
   if (!allEntries.length) {
     empty.hidden = false;
@@ -814,6 +1033,19 @@ function renderFreq() {
 function renderFreqCard(e) {
   const wrap = document.createElement("div");
   wrap.className = "card card--freq";
+  wrap.draggable = true;
+  wrap.addEventListener("dragstart", (ev) => {
+    ev.dataTransfer.setData(
+      DND,
+      JSON.stringify({
+        z: "freq",
+        nu: e.nu,
+        url: e.url,
+        title: e.title
+      })
+    );
+    ev.dataTransfer.effectAllowed = "copyMove";
+  });
 
   const tileActions = document.createElement("div");
   tileActions.className = "tile__actions";
@@ -832,6 +1064,7 @@ function renderFreqCard(e) {
   const link = document.createElement("a");
   link.className = "card__link";
   link.href = e.url;
+  link.draggable = false;
   link.target = "_blank";
   link.rel = "noopener noreferrer";
   link.addEventListener("click", async () => {
@@ -885,35 +1118,68 @@ async function hideFreqEntry(normalizedUrl) {
   }
 }
 
-async function addPinnedFromFreq(url, title) {
+async function addPinnedAt(
+  url,
+  title,
+  targetFolderId,
+  beforeItemId,
+  { hideFreqNu = null } = {}
+) {
   if (state.pinned.items.some((p) => p.url === url)) {
     showToast("已在常用链接中");
     return;
   }
-  const folderId = DEFAULT_PIN_FOLDER;
-  const inF = state.pinned.items.filter((p) => p.folderId === folderId);
   const now = Date.now();
   const item = {
     id: crypto.randomUUID(),
     url,
     title: title || hostLabel(url),
-    folderId,
-    sortOrder: inF.length,
+    folderId: targetFolderId,
+    sortOrder: 0,
     createdAt: now,
     updatedAt: now
   };
+
+  const allPinned = state.pinned.items.map((x) => ({ ...x }));
+  let bucket = allPinned
+    .filter((x) => x.folderId === targetFolderId)
+    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+
+  if (beforeItemId) {
+    const ix = bucket.findIndex((x) => x.id === beforeItemId);
+    if (ix >= 0) bucket.splice(ix, 0, item);
+    else bucket = [...bucket, item];
+  } else {
+    bucket = [...bucket, item];
+  }
+  bucket.forEach((it, i) => {
+    it.sortOrder = i;
+  });
+
+  const otherFolders = allPinned.filter((x) => x.folderId !== targetFolderId);
+  const merged = rebalanceSortOrder([...otherFolders, ...bucket]);
+
   try {
     await setPinnedState({
       folders: state.pinned.folders,
-      items: [...state.pinned.items, item]
+      items: merged
     });
     state.pinned = await getPinnedState();
+    if (hideFreqNu) {
+      await addFreqHiddenUrl(hideFreqNu);
+      state.freqHidden = await getFreqHiddenUrls();
+    }
     renderPinned();
+    renderFreq();
     showToast("已加入常用");
     await updateSyncBanner();
   } catch (e) {
     showToast(e.message || String(e));
   }
+}
+
+async function addPinnedFromFreq(url, title) {
+  await addPinnedAt(url, title, DEFAULT_PIN_FOLDER, null, {});
 }
 
 async function newFolder(which) {

@@ -56,6 +56,9 @@
               <input type="text" name="title" placeholder="标题（可选）" aria-label="标题" />
               <button type="submit" class="btn btn--primary btn--sm">添加</button>
             </form>
+            <p class="panel__hint panel__hint--sm">
+              磁贴可拖入「暂存」或下方「经常访问」；从这两处也可拖入本区文件夹。
+            </p>
             <p class="panel__hint" id="pinned-empty" hidden>
               暂无常用链接。可在上方手动添加，或从右侧「经常访问」加入。
             </p>
@@ -64,13 +67,16 @@
         </div>
 
         <div class="layout-col layout-col--right">
-          <section class="panel panel--scroll" aria-labelledby="stash-heading">
+          <section class="panel panel--stash" aria-labelledby="stash-heading">
             <div class="panel__head">
               <h2 class="panel__title" id="stash-heading">暂存</h2>
               <button type="button" class="btn btn--ghost btn--sm" id="btn-new-folder-stash">
                 ＋ 新建文件夹
               </button>
             </div>
+            <p class="panel__hint panel__hint--sm">
+              条目可拖入左侧「常用」或下方「经常访问」；从这两处也可拖回本区。
+            </p>
             <p class="panel__hint panel__hint--sm" id="stash-empty" hidden>
               暂无暂存。点击浏览器工具栏中的本扩展图标，可将当前网页一键加入暂存（默认文件夹）。
             </p>
@@ -82,6 +88,9 @@
               <h2 class="panel__title" id="freq-heading">经常访问</h2>
               <span class="panel__tag" id="freq-source-hint">本机数据 + 同步点击</span>
             </div>
+            <p class="panel__hint panel__hint--sm">
+              可与「常用」「暂存」拖拽互换：卡片拖入左/上为加入；从常用或暂存拖入本区为移除该条目。
+            </p>
             <p class="panel__hint panel__hint--sm" id="freq-empty" hidden>暂时无法读取站点列表。</p>
             <div id="freq-root" class="folder-stack"></div>
           </section>
